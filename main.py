@@ -2,7 +2,7 @@ from telegram import Update, ForceReply
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from configparser import ConfigParser
 from zipfile import ZipFile
-from time import time_ns
+from time import time
 import requests
 import os
 from PIL import Image
@@ -29,7 +29,7 @@ def echo(update: Update, context: CallbackContext) -> None:
 def process_file(update: Update, context: CallbackContext) -> None:
     print('Received a file: {}'.format(update.message.document.file_name))
 
-    filename = 'temp/input_' + str(time_ns())[:-10]
+    filename = 'temp/input_' + str(time())
     with open(filename, 'wb') as f:
         filepath = update.message.document.get_file()['file_path']
         r = requests.get(filepath)
