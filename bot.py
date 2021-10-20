@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import Updater, CallbackContext, MessageHandler, Filters, CommandHandler
 from chats_storage import ChatsStorage, SimpleChatsStorage, Chat
 import strings
-
+from image_service import ImageService
 
 def chat_decorator(func):
     def wrapper(self, update, *args, **kwargs):
@@ -30,9 +30,11 @@ def chat_decorator(func):
 class Bot:
     state_handlers: typing.Dict[int, typing.Callable]
     chats: ChatsStorage
+    image_service: ImageService
 
     def __init__(self, token: str):
         self.chats = SimpleChatsStorage()
+        self.image_service = ImageService()
 
         self.state_handlers = {
             Chat.States.START: self.action_start,
@@ -84,12 +86,48 @@ class Bot:
 
     @chat_decorator
     def action_got_archive(self, update: Update, context: CallbackContext, chat: Chat = None) -> Chat:
+        if update.message.document is None or update.message.document.mime_type != 'application/zip':
+            update.message.reply_text(strings.not_a_zip_archive)
+            chat.state = Chat.States.WAIT_FOR_ARCHIVE
+            return chat
+
+        print(update.message.document.get_file().file_path)
+        chat.archive = update.message.document.get_file()
+
         update.message.reply_text(strings.send_collage_count.format(1, 300))
         chat.state = Chat.States.WAIT_FOR_COLLAGE_COUNT
         return chat
 
     @chat_decorator
     def action_submit_collage(self, update: Update, context: CallbackContext, chat: Chat = None) -> Chat:
+        try:
+            collage_count = int(update.message.text)
+
+        except ValueError:
+            update.message.reply_text(strings.not_a_number)
+            chat.state = Chat.States.WAIT_FOR_COLLAGE_COUNT
+            return chat
+
+        if not chat.min_collage_count <= collage_count <= chat.max_collage_count:
+            update.message.reply_text(
+                strings.collage_count_out_of_range.format(chat.min_collage_count, chat.max_collage_count)
+            )
+            chat.state = Chat.States.WAIT_FOR_COLLAGE_COUNT
+            return chat
+
+        chat.collage_count = collage_count
+
         update.message.reply_text(strings.start_making_collage)
+
+        print(chat.to_dict())
+        print(self.chats.get(chat.id).to_dict())
+        print(self.chats.print_all())
+        print(chat.archive)
+        self.image_service.generate_collage(
+            chat.archive.file_path,
+            chat.collage_count,
+            lambda x: context.bot.send_document(chat.id, x)
+        )
+
         chat.state = Chat.States.IDLE
         return chat
