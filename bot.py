@@ -1,10 +1,14 @@
 import random
+from json import dumps
+
+import greenstalk
 import typing
 from telegram import Update
 from telegram.ext import Updater, CallbackContext, MessageHandler, Filters, CommandHandler
 from chats_storage import ChatsStorage, SimpleChatsStorage, Chat
 import strings
-from image_service import ImageService
+from worker.message_sender import MessageSender
+
 
 def chat_decorator(func):
     def wrapper(self, update, *args, **kwargs):
@@ -30,11 +34,9 @@ def chat_decorator(func):
 class Bot:
     state_handlers: typing.Dict[int, typing.Callable]
     chats: ChatsStorage
-    image_service: ImageService
 
     def __init__(self, token: str):
         self.chats = SimpleChatsStorage()
-        self.image_service = ImageService()
 
         self.state_handlers = {
             Chat.States.START: self.action_start,
@@ -44,6 +46,10 @@ class Bot:
         }
 
         self.updater = Updater(token)
+
+        self.message_sender = MessageSender(self.updater.bot, 'send.message')
+        self.message_sender.start()
+
         self.dispatcher = self.updater.dispatcher
         self.dispatcher.add_handler(CommandHandler('start', self.action_start))
         self.dispatcher.add_handler(CommandHandler('collage', self.action_collage))
@@ -117,17 +123,15 @@ class Bot:
 
         chat.collage_count = collage_count
 
-        update.message.reply_text(strings.start_making_collage)
+        with greenstalk.Client(('127.0.0.1', 11300)) as client:
+            client.use('make.collage')
+            client.put(dumps({
+                'chat_id': chat.id,
+                'archive_link': chat.archive.file_path,
+                'collage_count': chat.collage_count
+            }))
 
-        print(chat.to_dict())
-        print(self.chats.get(chat.id).to_dict())
-        print(self.chats.print_all())
-        print(chat.archive)
-        self.image_service.generate_collage(
-            chat.archive.file_path,
-            chat.collage_count,
-            lambda x: context.bot.send_document(chat.id, x)
-        )
+        update.message.reply_text(strings.start_making_collage)
 
         chat.state = Chat.States.IDLE
         return chat

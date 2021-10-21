@@ -1,55 +1,70 @@
-from PIL import Image
 import random
+
+import greenstalk
+from json import dumps
+
+from PIL import Image
+
+from worker import Worker
 import os
-from zipfile import ZipFile
 from time import time
 import requests
+from zipfile import ZipFile
 
 
-class ImageService:
-    def generate_collage(self, archive_link: str, collage_count: int, callback):
-        self.process_file(archive_link, collage_count, callback)
+class CollageWorker(Worker):
+    def handle(self, workload: dict):
+        # Пока что это монолитный метод, но его надо разбить
+        print("Got a job")
+        try:
+            archive_link = workload['archive_link']
+            collage_count = workload['collage_count']
+            chat_id = workload['chat_id']
 
-    def process_file(self, archive_link: str, collage_count: int, callback):
-        print('Received a file: {}'.format(archive_link))
+        except KeyError as e:
+            print("Invalid workload:", e)
+            return
 
-        filename = 'temp/input_' + str(time())
-        with open(filename, 'wb') as f:
-            r = requests.get(archive_link)
+        # Создаем пустые папки для временных файлов
+        seed = str(time()).split('.')[1][:6]
+        path = 'temp/{}_{}'.format(chat_id, seed)
+        os.makedirs(path + '/in')
+        os.makedirs(path + '/out')
+
+        # Скачиваем архив
+        r = requests.get(archive_link)
+
+        # Сохраняем архив в файл (можно пропустить?)
+        with open(path + '/in.zip', 'wb') as f:
             f.write(r.content)
-            print('Downloaded from {} and saved as {}'.format(archive_link, filename))
 
-        with ZipFile(filename, 'r') as zip:
-            self.extract(zip, 'temp/in/')
+        # Распаковываем архив в папку in
+        with ZipFile(path + '/in.zip') as zip:
+            zip.extractall(path + '/in')
 
-        if not os.path.exists('temp/out'):
-            os.makedirs('temp/out')
+        self.make_collage(path + '/in/', path + '/out/', collage_count)
 
-        self.make_collage('temp/in/', 'temp/out/', collage_count)
+        file_paths = os.listdir(path + '/out')
 
-        file_paths = os.listdir('temp/out')
-        with ZipFile('temp/out.zip', 'w') as zip:
+        with ZipFile(path + '/out.zip', 'w') as zip:
             print("Creating zip archive")
             for file in file_paths:
                 print("Add {} to the archive".format(file))
-                zip.write('temp/out/' + file)
+                zip.write(path + '/out/' + file)
 
-        filesize = os.path.getsize('temp/out.zip')
+        filesize = os.path.getsize(path + '/out.zip')
         print("Sending document of size {}".format(str(int(filesize / 1024 / 1024 * 100) / 100) + ' Mb'))
-        callback(open('temp/out.zip', 'rb'))
 
-        os.remove(filename)
-        os.remove('temp/out.zip')
-        [os.remove('temp/in/' + x) for x in os.listdir('temp/in')]
-        [os.remove('temp/out/' + x) for x in os.listdir('temp/out')]
+        with greenstalk.Client(('127.0.0.1', 11300)) as client:
+            client.use('send.message')
+            client.put(dumps({
+                'chat_id': chat_id,
+                'type': 'file',
+                'filepath': path + '/out.zip'
+            }))
 
-    def extract(self, zip, path):
-        ''' Извлечь все изображения из архива в папку '''
-        # TODO Извлекать только изображения
-        # TODO Возможные проблемы с кириллицей
-        # TODO Также извлекать картинки из вложенных папок
-        zip.extractall(path)
 
+    #  TODO зарефакторить это все
     def make_collage(self, inpath, outpath, count):
         images = [Image.open(inpath + f) for f in os.listdir(inpath) if os.path.isfile(os.path.join(inpath, f))]
         print("Loaded {} images".format(len(images)))
@@ -107,3 +122,7 @@ class ImageService:
         return image.crop(box).resize((int(size), int(size)))
 
 
+if __name__ == '__main__':
+    instance = CollageWorker('make.collage')
+    # instance.handle({"chat_id": 77643276, "archive_link": "https://api.telegram.org/file/bot1972882558:AAFmJ7BOnBDn6s_2CXy5sKH2A2NvONLYKmY/documents/file_4.zip", "collage_count": 3})
+    instance.run()
