@@ -6,8 +6,9 @@ import typing
 from telegram import Update
 from telegram.ext import Updater, CallbackContext, MessageHandler, Filters, CommandHandler
 from chats_storage import ChatsStorage, SimpleChatsStorage, Chat
-import strings
+from assets import strings
 from worker.message_sender import MessageSender
+import config.beanstalk
 
 
 def chat_decorator(func):
@@ -47,7 +48,7 @@ class Bot:
 
         self.updater = Updater(token)
 
-        self.message_sender = MessageSender(self.updater.bot, 'send.message')
+        self.message_sender = MessageSender(self.updater.bot, config.beanstalk.message_sender_queue)
         self.message_sender.start()
 
         self.dispatcher = self.updater.dispatcher
@@ -123,8 +124,8 @@ class Bot:
 
         chat.collage_count = collage_count
 
-        with greenstalk.Client(('127.0.0.1', 11300)) as client:
-            client.use('make.collage')
+        with greenstalk.Client((config.beanstalk.host, config.beanstalk.port)) as client:
+            client.use(config.beanstalk.collage_worker_queue)
             client.put(dumps({
                 'chat_id': chat.id,
                 'archive_link': chat.archive.file_path,

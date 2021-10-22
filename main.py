@@ -1,9 +1,6 @@
-from configparser import ConfigParser
 from bot import Bot
+import config.telegram
 
 if __name__ == '__main__':
-    config = ConfigParser()
-    config.read('config.ini', encoding='utf-8')
-
-    bot = Bot(config.get('TELEGRAM', 'token'))
+    bot = Bot(config.telegram.token)
     bot.run()

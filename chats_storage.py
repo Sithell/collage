@@ -20,9 +20,6 @@ class ChatsStorage(ABC):
 class SimpleChatsStorage(ChatsStorage):
     chats: typing.Dict[int, dict] = {}
 
-    def print_all(self):
-        print(self.chats[788277446])
-
     def get(self, chat_id: int) -> Chat:
         if chat_id in self.chats:
             return Chat.from_dict(self.chats[chat_id])  # because we store chats as dict, not Chat objects

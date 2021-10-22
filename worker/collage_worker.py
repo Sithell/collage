@@ -10,6 +10,7 @@ import os
 from time import time
 import requests
 from zipfile import ZipFile
+import config.beanstalk
 
 
 class CollageWorker(Worker):
@@ -42,27 +43,31 @@ class CollageWorker(Worker):
         with ZipFile(path + '/in.zip') as zip:
             zip.extractall(path + '/in')
 
+        # Создаем коллажи (из папки in в папку out)
         self.make_collage(path + '/in/', path + '/out/', collage_count)
 
+        # Находим все файлы в папке out
         file_paths = os.listdir(path + '/out')
 
+        # Архивируем содержимое папки out
         with ZipFile(path + '/out.zip', 'w') as zip:
             print("Creating zip archive")
             for file in file_paths:
                 print("Add {} to the archive".format(file))
                 zip.write(path + '/out/' + file)
 
+        # Определяем размер полученного архива (telegram не может отправить больше 50 Мб)
         filesize = os.path.getsize(path + '/out.zip')
         print("Sending document of size {}".format(str(int(filesize / 1024 / 1024 * 100) / 100) + ' Mb'))
 
-        with greenstalk.Client(('127.0.0.1', 11300)) as client:
-            client.use('send.message')
+        # Ставим джоб на отправку файла пользователю
+        with greenstalk.Client((config.beanstalk.host, config.beanstalk.port)) as client:
+            client.use(config.beanstalk.message_sender_queue)
             client.put(dumps({
                 'chat_id': chat_id,
                 'type': 'file',
                 'filepath': path + '/out.zip'
             }))
-
 
     #  TODO зарефакторить это все
     def make_collage(self, inpath, outpath, count):
@@ -123,6 +128,5 @@ class CollageWorker(Worker):
 
 
 if __name__ == '__main__':
-    instance = CollageWorker('make.collage')
-    # instance.handle({"chat_id": 77643276, "archive_link": "https://api.telegram.org/file/bot1972882558:AAFmJ7BOnBDn6s_2CXy5sKH2A2NvONLYKmY/documents/file_4.zip", "collage_count": 3})
+    instance = CollageWorker(config.beanstalk.collage_worker_queue)
     instance.run()
