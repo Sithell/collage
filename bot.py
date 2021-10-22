@@ -83,7 +83,7 @@ class Bot:
         user = update.effective_user
         locale = update.effective_user.language_code
 
-        update.message.reply_text(strings.welcome.format(user.username))
+        update.message.reply_text(strings.welcome.format(user.first_name))
         chat.state = Chat.States.IDLE
         return chat
 
