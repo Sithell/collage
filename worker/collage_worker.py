@@ -1,3 +1,13 @@
+# Нужно чтобы импортировать файлы из родительской директории (TODO пофиксить)
+import os
+import sys
+import inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir)
+
+from assets import strings
+
 import random
 
 import greenstalk
@@ -50,24 +60,36 @@ class CollageWorker(Worker):
         file_paths = os.listdir(path + '/out')
 
         # Архивируем содержимое папки out
-        with ZipFile(path + '/out.zip', 'w') as zip:
+        out_file_path = path + '/out.zip'
+        with ZipFile(out_file_path, 'w') as zip:
             print("Creating zip archive")
             for file in file_paths:
                 print("Add {} to the archive".format(file))
                 zip.write(path + '/out/' + file)
 
-        # Определяем размер полученного архива (telegram не может отправить больше 50 Мб)
-        filesize = os.path.getsize(path + '/out.zip')
-        print("Sending document of size {}".format(str(int(filesize / 1024 / 1024 * 100) / 100) + ' Mb'))
 
-        # Ставим джоб на отправку файла пользователю
-        with greenstalk.Client((config.beanstalk.host, config.beanstalk.port)) as client:
-            client.use(config.beanstalk.message_sender_queue)
-            client.put(dumps({
-                'chat_id': chat_id,
-                'type': 'file',
-                'filepath': path + '/out.zip'
-            }))
+        # Определяем размер полученного архива (telegram не может отправить больше 50 Мб)
+        filesize = os.path.getsize(out_file_path)
+        print("Sending document of size {}".format(str(int(filesize / 1024 / 1024 * 100) / 100) + ' Mb'))
+        if filesize < 45 * 1024 * 1024: # Файл меньше 45 Мб
+            # Ставим джоб на отправку файла пользователю
+            with greenstalk.Client((config.beanstalk.host, config.beanstalk.port)) as client:
+                client.use(config.beanstalk.message_sender_queue)
+                client.put(dumps({
+                    'chat_id': chat_id,
+                    'type': 'file',
+                    'filepath': path + '/out.zip'
+                }))
+
+        else:
+            # Ставим джоб на отправку ссылки на файл пользователю
+            with greenstalk.Client((config.beanstalk.host, config.beanstalk.port)) as client:
+                client.use(config.beanstalk.message_sender_queue)
+                client.put(dumps({
+                    'chat_id': chat_id,
+                    'type': 'text',
+                    'message': strings.large_file.format("http://sithell.me/" + out_file_path)
+                }))
 
     #  TODO зарефакторить это все
     def make_collage(self, inpath, outpath, count):
