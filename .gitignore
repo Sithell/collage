@@ -1,4 +1,4 @@
 .idea/
 venv/
 temp/
-config.ini
+__pycache__/
