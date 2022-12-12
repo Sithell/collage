@@ -23,20 +23,15 @@ cp config/beanstalk.py.dist config/beanstalk.py
 cp config/telegram.py.dist config/telegram.py  
 ```
 
-5. Создать папку `temp`
-```bash
-mkdir temp
-```
-
-6. Запустить бота
+5. Запустить бота
 ```bash
 python main.py
 ```
 
-7. Параллельно запустить воркер(ы)
+6. Параллельно запустить воркер(ы)
 ```bash
 python worker/collage_worker.py
 ```
 
-8. Готово.
+7. Готово.
 
