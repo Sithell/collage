@@ -20,7 +20,7 @@ pip install -r requirements.txt
 4. Заполнить конфиги, в т.ч. токен в `config/telegram.py`
 ```bash
 cp config/beanstalk.py.dist config/beanstalk.py
-cp config/telegram.py config/telegram.py  
+cp config/telegram.py.dist config/telegram.py  
 ```
 
 5. Создать папку `temp`
